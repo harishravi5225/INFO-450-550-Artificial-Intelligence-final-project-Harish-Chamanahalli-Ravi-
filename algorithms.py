@@ -1,6 +1,40 @@
 import random
 
 # --------------------------
+# Evaluation Functions
+# --------------------------
+
+def simple_checkers_eval(state, player):
+    white, black, white_kings, black_kings = state.count_pieces()
+    if player == 1:
+        return white + 2 * white_kings - (black + 2 * black_kings)
+    else:
+        return black + 2 * black_kings - (white + 2 * white_kings)
+
+def refined_checkers_eval(state, player):
+    white, black, white_kings, black_kings = state.count_pieces()
+    value = (
+        (white + 2.5 * white_kings) - (black + 2.5 * black_kings) +
+        0.2 * state.center_control(player) -
+        0.5 * state.threatened_pieces(player)
+    )
+    return value if player == 1 else -value
+
+def simple_reversi_eval(state, player):
+    white, black = state.count_discs()
+    return white - black if player == 1 else black - white
+
+def refined_reversi_eval(state, player):
+    white, black = state.count_discs()
+    corners = state.corner_ownership(player)
+    value = (
+        (white - black) +
+        3 * corners
+    )
+    return value if player == 1 else -value
+
+
+# --------------------------
 # Random Agent
 # --------------------------
 
@@ -16,7 +50,7 @@ class RandomAgent:
 # --------------------------
 
 class MinimaxAgent:
-    def __init__(self, max_depth, eval_fn, use_move_ordering=False):
+    def __init__(self, max_depth, eval_fn=None, use_move_ordering=False):
         """
         max_depth: int - maximum search depth
         eval_fn: function(state, player) -> float
@@ -46,7 +80,7 @@ class MinimaxAgent:
 
     def max_value(self, state, alpha, beta, depth):
         if state.is_terminal() or depth >= self.max_depth:
-            return self.eval_fn(state, state.player)
+            return self.evaluate(state)
         v = -float('inf')
         moves = state.get_legal_moves()
         if self.use_move_ordering:
@@ -61,7 +95,7 @@ class MinimaxAgent:
 
     def min_value(self, state, alpha, beta, depth):
         if state.is_terminal() or depth >= self.max_depth:
-            return self.eval_fn(state, state.player)
+            return self.evaluate(state)
         v = float('inf')
         moves = state.get_legal_moves()
         if self.use_move_ordering:
@@ -74,15 +108,19 @@ class MinimaxAgent:
             beta = min(beta, v)
         return v
 
+    def evaluate(self, state):
+        if self.eval_fn:
+            return self.eval_fn(state, state.player)
+        else:
+            return state.utility()
+
+
 # --------------------------
 # MCTS Agent (Monte Carlo Tree Search)
 # --------------------------
 
 class MCTSAgent:
     def __init__(self, num_simulations=50):
-        """
-        num_simulations: int - number of random playouts per move
-        """
         self.num_simulations = num_simulations
 
     def select_move(self, state):
@@ -100,7 +138,6 @@ class MCTSAgent:
                 if result == state.player:
                     move_wins[move] += 1
 
-        # Choose the move with the highest win rate
         best_move = max(
             legal_moves,
             key=lambda m: move_wins[m] / move_plays[m]
@@ -108,11 +145,6 @@ class MCTSAgent:
         return best_move
 
     def simulate(self, state):
-        """
-        Play a random playout from the current state to terminal.
-        Returns:
-            winner (1 or -1) or 0/None for draw
-        """
         current_state = state
         while not current_state.is_terminal():
             legal = current_state.get_legal_moves()
