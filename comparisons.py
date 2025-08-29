@@ -1,129 +1,102 @@
 import sys
 import time
-import numpy as np
-from problems import TicTacToeState, CheckersState, ReversiState
-from algorithms import MinimaxAgent, RandomAgent, MCTSAgent
+from problems import (
+    TicTacToeState,
+    CheckersState,
+    ReversiState,
+    tictactoe_simple_heuristic,
+    tictactoe_refined_heuristic,
+    checkers_simple_heuristic,
+    checkers_refined_heuristic,
+    reversi_simple_heuristic,
+    reversi_refined_heuristic,
+)
+from algorithms import MinimaxAgent, MCTSAgent, RandomAgent
 
-# Evaluation functions
-def tictactoe_eval(state, player):
-    winner = state.get_winner()
-    if winner == player:
-        return 1000
-    elif winner == -player:
-        return -1000
-    return 0
+# Available game classes
+GAMES = {
+    "tictactoe": TicTacToeState,
+    "checkers": CheckersState,
+    "reversi": ReversiState,
+}
 
-def checkers_eval(state, player):
-    return np.sum(state.board) * player
+# Heuristic functions for Minimax agents
+HEURISTICS = {
+    "tictactoe": {
+        "simple": tictactoe_simple_heuristic,
+        "refined": tictactoe_refined_heuristic,
+    },
+    "checkers": {
+        "simple": checkers_simple_heuristic,
+        "refined": checkers_refined_heuristic,
+    },
+    "reversi": {
+        "simple": reversi_simple_heuristic,
+        "refined": reversi_refined_heuristic,
+    },
+}
 
-def reversi_eval(state, player):
-    board = state.board
-    score = np.sum(board) * player
-    corners = [(0,0),(0,7),(7,0),(7,7)]
-    for i,j in corners:
-        if board[i,j]==player:
-            score += 10
-        elif board[i,j]==-player:
-            score -=10
-    return score
+# Agent factory
+def get_agent(agent_name, game_name):
+    if agent_name == "random":
+        return RandomAgent()
+    elif agent_name == "mcts":
+        return MCTSAgent(num_simulations=100)
+    elif agent_name in HEURISTICS[game_name]:
+        return MinimaxAgent(max_depth=3, eval_fn=HEURISTICS[game_name][agent_name])
+    else:
+        raise ValueError(f"Unknown agent: {agent_name}")
 
-def play_game(initial_state, agent1, agent2, verbose=False):
-    state = initial_state
+# Main function to run experiments
+def run_games(game_name, agent1_name, agent2_name, num_games):
+    GameClass = GAMES[game_name]
+    agent1 = get_agent(agent1_name, game_name)
+    agent2 = get_agent(agent2_name, game_name)
     agents = {1: agent1, -1: agent2}
-    move_times = {1: [], -1: []}
-    num_moves = 0
 
-    while not state.is_terminal():
-        current_player = state.player
-        agent = agents[current_player]
-        start_time = time.time()
-        move = agent.select_move(state)
-        end_time = time.time()
+    wins = {1: 0, -1: 0, 0: 0}
+    total_moves = 0
+    total_time = 0.0
 
-        if move is None:
-            break
-
-        elapsed = end_time - start_time
-        move_times[current_player].append(elapsed)
-
-        state = state.apply_move(move)
-        num_moves += 1
-
-        if verbose:
-            state.print_board()
-
-    winner = state.get_winner()
-    return {
-        "winner": winner,
-        "num_moves": num_moves,
-        "avg_time_p1": sum(move_times[1])/len(move_times[1]) if move_times[1] else 0,
-        "avg_time_p2": sum(move_times[-1])/len(move_times[-1]) if move_times[-1] else 0
-    }
-
-def run_experiments(game, opponent="mcts", num_games=20):
-    # Select game and evaluation function
-    if game == "tictactoe":
-        state_class = TicTacToeState
-        eval_fn = tictactoe_eval
-    elif game == "checkers":
-        state_class = CheckersState
-        eval_fn = checkers_eval
-    elif game == "reversi":
-        state_class = ReversiState
-        eval_fn = reversi_eval
-    else:
-        raise ValueError("Unknown game")
-
-    # Minimax always as Agent1
-    agent1 = MinimaxAgent(
-        max_depth=3,
-        eval_fn=eval_fn,
-        use_move_ordering=True
-    )
-
-    # Choose opponent agent
-    if opponent == "mcts":
-        agent2 = MCTSAgent(num_simulations=20)
-    elif opponent == "random":
-        agent2 = RandomAgent()
-    else:
-        raise ValueError("Unknown opponent type (must be 'mcts' or 'random')")
-
-    results = []
     for i in range(num_games):
-        # Alternate who starts
-        if i % 2 == 0:
-            state = state_class(player=1)
-            res = play_game(state, agent1, agent2)
-        else:
-            state = state_class(player=-1)
-            res = play_game(state, agent2, agent1)
-            # Flip winner perspective
-            if res["winner"] is not None:
-                res["winner"] *= -1
-            res["avg_time_p1"], res["avg_time_p2"] = res["avg_time_p2"], res["avg_time_p1"]
+        state = GameClass(player=1)
+        move_count = 0
+        start_time = time.perf_counter()
 
-        results.append(res)
+        while not state.is_terminal():
+            agent = agents[state.player]
+            move = agent.select_move(state)
+            if move is None:
+                break
+            state = state.apply_move(move)
+            move_count += 1
 
-    # Aggregate results
-    wins = sum(1 for r in results if r["winner"] == 1)
-    losses = sum(1 for r in results if r["winner"] == -1)
-    draws = sum(1 for r in results if r["winner"] == 0 or r["winner"] is None)
-    avg_moves = sum(r["num_moves"] for r in results) / num_games
-    avg_time_p1 = sum(r["avg_time_p1"] for r in results) / num_games
-    avg_time_p2 = sum(r["avg_time_p2"] for r in results) / num_games
+        end_time = time.perf_counter()
+        game_time = end_time - start_time
+        total_time += game_time
+        total_moves += move_count
 
-    print(f"\n=== Results over {num_games} games ({game} - Minimax vs {opponent}) ===")
-    print("Agent1 (Minimax) Wins:", wins)
-    print("Agent1 Losses:", losses)
-    print("Draws:", draws)
-    print("Average moves per game:", avg_moves)
-    print("Average time per move (Agent1): {:.4f}s".format(avg_time_p1))
-    print("Average time per move (Agent2): {:.4f}s".format(avg_time_p2))
+        winner = state.get_winner()
+        wins[winner] += 1
+        print(f"Game {i+1}: Winner = {winner}, Moves = {move_count}, Time = {game_time:.2f}s")
 
+    print("\nResults after", num_games, "games:")
+    print(f"{agent1_name} wins: {wins[1]}")
+    print(f"{agent2_name} wins: {wins[-1]}")
+    print(f"Draws: {wins[0]}")
+    print(f"Average moves per game: {total_moves / num_games:.2f}")
+    print(f"Average time per move: {total_time / total_moves:.4f} seconds")
+
+# Command-line usage
 if __name__ == "__main__":
-    game = sys.argv[1] if len(sys.argv) > 1 else "tictactoe"
-    opponent = sys.argv[2] if len(sys.argv) > 2 else "mcts"
-    num_games = int(sys.argv[3]) if len(sys.argv) > 3 else 20
-    run_experiments(game=game, opponent=opponent, num_games=num_games)
+    if len(sys.argv) < 5:
+        print("Usage: python comparisons.py [game] [agent1] [agent2] [num_games]")
+        print("Example: python comparisons.py checkers simple mcts 20")
+        sys.exit(1)
 
+    game_name = sys.argv[1].lower()
+    agent1_name = sys.argv[2].lower()
+    agent2_name = sys.argv[3].lower()
+    num_games = int(sys.argv[4])
+
+    run_games(game_name, agent1_name, agent2_name, num_games)
