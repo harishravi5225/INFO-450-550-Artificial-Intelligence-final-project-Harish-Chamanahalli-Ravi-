@@ -1,7 +1,11 @@
 import sys
+import numpy as np
 from problems import TicTacToeState, CheckersState, ReversiState
 from algorithms import MinimaxAgent, RandomAgent
-import numpy as np
+
+# -----------------------------
+# Evaluation Functions
+# -----------------------------
 
 def tictactoe_eval(state, player):
     winner = state.get_winner()
@@ -9,13 +13,22 @@ def tictactoe_eval(state, player):
         return 1000
     elif winner == -player:
         return -1000
-    return 0
+    return 0  # Neutral evaluation
 
 def checkers_eval(state, player):
-    return np.sum(state.board) * player
+    white, black, white_kings, black_kings = state.count_pieces()
+    if player == 1:
+        return white + 2 * white_kings - (black + 2 * black_kings)
+    else:
+        return black + 2 * black_kings - (white + 2 * white_kings)
 
 def reversi_eval(state, player):
-    return np.sum(state.board) * player
+    white, black = state.count_discs()
+    return white - black if player == 1 else black - white
+
+# -----------------------------
+# Main Loop
+# -----------------------------
 
 if __name__ == "__main__":
     game = sys.argv[1] if len(sys.argv) > 1 else "tictactoe"
@@ -30,7 +43,7 @@ if __name__ == "__main__":
         state = ReversiState(player=1)
         eval_fn = reversi_eval
     else:
-        raise ValueError("Unknown game")
+        raise ValueError("Unknown game: choose from 'tictactoe', 'checkers', or 'reversi'")
 
     minimax_agent = MinimaxAgent(max_depth=3, eval_fn=eval_fn, use_move_ordering=True)
     random_agent = RandomAgent()
