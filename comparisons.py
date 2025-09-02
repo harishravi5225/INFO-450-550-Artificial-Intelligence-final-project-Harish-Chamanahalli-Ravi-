@@ -1,5 +1,6 @@
 import sys
 import time
+import random
 from problems import (
     TicTacToeState,
     CheckersState,
@@ -47,6 +48,16 @@ def get_agent(agent_name, game_name):
     else:
         raise ValueError(f"Unknown agent: {agent_name}")
 
+# Add two random opening moves
+def add_random_openings(state):
+    for _ in range(2):  # One move for each player
+        legal = state.get_legal_moves()
+        if not legal:
+            break
+        random_move = random.choice(legal)
+        state = state.apply_move(random_move)
+    return state
+
 # Main function to run experiments
 def run_games(game_name, agent1_name, agent2_name, num_games):
     GameClass = GAMES[game_name]
@@ -60,6 +71,7 @@ def run_games(game_name, agent1_name, agent2_name, num_games):
 
     for i in range(num_games):
         state = GameClass(player=1)
+        state = add_random_openings(state)  # Inject randomness
         move_count = 0
         start_time = time.perf_counter()
 
@@ -77,10 +89,18 @@ def run_games(game_name, agent1_name, agent2_name, num_games):
         total_moves += move_count
 
         winner = state.get_winner()
-        wins[winner] += 1
-        print(f"Game {i+1}: Winner = {winner}, Moves = {move_count}, Time = {game_time:.2f}s")
 
-    print("\nResults after", num_games, "games:")
+        # Safely handle all possible outcomes
+        if winner in [1, -1]:
+            wins[winner] += 1
+            winner_str = f"{winner}"
+        else:
+            wins[0] += 1
+            winner_str = "Draw"
+
+        print(f"Game {i+1}: Winner = {winner_str}, Moves = {move_count}, Time = {game_time:.2f}s")
+
+    print(f"\nResults after {num_games} games:")
     print(f"{agent1_name} wins: {wins[1]}")
     print(f"{agent2_name} wins: {wins[-1]}")
     print(f"Draws: {wins[0]}")
@@ -91,12 +111,16 @@ def run_games(game_name, agent1_name, agent2_name, num_games):
 if __name__ == "__main__":
     if len(sys.argv) < 5:
         print("Usage: python comparisons.py [game] [agent1] [agent2] [num_games]")
-        print("Example: python comparisons.py checkers simple mcts 20")
+        print("Example: python comparisons.py checkers simple refined 30")
         sys.exit(1)
 
     game_name = sys.argv[1].lower()
     agent1_name = sys.argv[2].lower()
     agent2_name = sys.argv[3].lower()
     num_games = int(sys.argv[4])
+
+    if game_name not in GAMES:
+        print(f"Unsupported game: {game_name}")
+        sys.exit(1)
 
     run_games(game_name, agent1_name, agent2_name, num_games)
