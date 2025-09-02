@@ -1,4 +1,5 @@
 import sys
+import random
 import numpy as np
 from problems import TicTacToeState, CheckersState, ReversiState
 from algorithms import MinimaxAgent, RandomAgent
@@ -27,6 +28,23 @@ def reversi_eval(state, player):
     return white - black if player == 1 else black - white
 
 # -----------------------------
+# Random Rollout Setup
+# -----------------------------
+def apply_random_rollouts(state, num_moves=2):
+    """
+    Apply 'num_moves' random moves (1 per player) to create variation in Minimax play.
+    """
+    for _ in range(num_moves):
+        if state.is_terminal():
+            break
+        legal_moves = state.get_legal_moves()
+        if not legal_moves:
+            break
+        move = random.choice(legal_moves)
+        state = state.apply_move(move)
+    return state
+
+# -----------------------------
 # Main Loop
 # -----------------------------
 
@@ -44,6 +62,9 @@ if __name__ == "__main__":
         eval_fn = reversi_eval
     else:
         raise ValueError("Unknown game: choose from 'tictactoe', 'checkers', or 'reversi'")
+
+    # Apply random rollouts for variation
+    state = apply_random_rollouts(state, num_moves=2)
 
     minimax_agent = MinimaxAgent(max_depth=3, eval_fn=eval_fn, use_move_ordering=True)
     random_agent = RandomAgent()
